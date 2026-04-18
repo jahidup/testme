@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Login - NexGen Exam Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 w-full max-w-md border border-white/20">
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold text-white mb-2">Student Login</h1>
+      <p class="text-indigo-200">Enter your credentials to continue</p>
+    </div>
+    
+    <form id="loginForm" class="space-y-6">
+      <div>
+        <label class="block text-white text-sm font-medium mb-2">Student ID</label>
+        <input type="text" id="studentId" required
+               class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      </div>
+      <div>
+        <label class="block text-white text-sm font-medium mb-2">Date of Birth (DDMMYYYY)</label>
+        <input type="text" id="dob" placeholder="DDMMYYYY" required pattern="\d{8}"
+               class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      </div>
+      <button type="submit"
+              class="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transform hover:scale-[1.02] transition-all">
+        Sign In
+      </button>
+    </form>
+    
+    <div id="error" class="mt-4 text-red-300 text-center hidden"></div>
+  </div>
+
+  <!-- Blocked Modal -->
+  <div id="blockedModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+      <h3 class="text-xl font-bold text-red-600 mb-4">Account Blocked</h3>
+      <p id="blockReason" class="text-gray-700 mb-6"></p>
+      <div class="flex justify-end space-x-3">
+        <button id="sendUnblockRequestBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+          Send Unblock Request
+        </button>
+        <button id="closeBlockedModalBtn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    if (localStorage.getItem('studentData')) {
+      window.location.href = 'dashboard.html';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const studentId = document.getElementById('studentId').value;
+      const dob = document.getElementById('dob').value;
+      const errorDiv = document.getElementById('error');
+      
+      try {
+        const response = await fetch('/api/auth/student/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId, dob })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          localStorage.setItem('studentData', JSON.stringify(data.student));
+          window.location.href = 'dashboard.html';
+        } else if (data.blocked) {
+          document.getElementById('blockReason').textContent = data.reason;
+          document.getElementById('blockedModal').classList.remove('hidden');
+          document.getElementById('blockedModal').classList.add('flex');
+          
+          document.getElementById('sendUnblockRequestBtn').onclick = async () => {
+            await fetch('/api/messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                studentId,
+                sender: 'student',
+                content: 'Request to unblock my account',
+                isUnblockRequest: true
+              })
+            });
+            alert('Unblock request sent to admin');
+            document.getElementById('blockedModal').classList.add('hidden');
+          };
+          
+          document.getElementById('closeBlockedModalBtn').onclick = () => {
+            document.getElementById('blockedModal').classList.add('hidden');
+          };
+        } else {
+          errorDiv.textContent = data.error || 'Login failed';
+          errorDiv.classList.remove('hidden');
+        }
+      } catch (err) {
+        errorDiv.textContent = 'Network error. Please try again.';
+        errorDiv.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
