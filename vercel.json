@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "backend/server.js", "use": "@vercel/node" },
+    { "src": "frontend/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "backend/server.js" },
+    { "src": "/admin", "status": 302, "headers": { "Location": "/admin/index.html" } },
+    { "src": "/admin/(.*)", "dest": "/frontend/admin/$1" },
+    { "src": "/student", "status": 302, "headers": { "Location": "/student/index.html" } },
+    { "src": "/student/(.*)", "dest": "/frontend/student/$1" },
+    { "src": "/", "status": 302, "headers": { "Location": "/student" } },
+    { "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico))", "dest": "/frontend/$1" }
+  ]
+}
