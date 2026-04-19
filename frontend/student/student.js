@@ -130,48 +130,39 @@ async function loadAvailableTests(container) {
   }
 }
 
-// ==================== FIXED: startTest with currentIndex initialization ====================
+// ==================== FIXED: startTest ====================
 async function startTest(testId) {
   showLoading();
   try {
-    // 1. Start test session
     const result = await apiCall('/student/start-test', {
       method: 'POST',
       body: JSON.stringify({ studentId: state.student.studentId, testId })
     });
 
-    // 2. Fetch test details and questions in parallel
     const [testsList, questions] = await Promise.all([
       apiCall('/public/tests'),
       apiCall(`/public/questions/${testId}`)
     ]);
 
-    // 3. Validate test existence
     const test = testsList.find(t => t.testId === testId);
-    if (!test) {
-      throw new Error('Test not found or no longer available.');
-    }
-    if (!Array.isArray(questions) || questions.length === 0) {
-      throw new Error('No questions found for this test.');
-    }
+    if (!test) throw new Error('Test not found or no longer available.');
+    if (!Array.isArray(questions) || questions.length === 0) throw new Error('No questions found for this test.');
 
-    // 4. Prepare test state (CRITICAL: set currentIndex to 0)
     state.currentTest = {
       testId,
       test,
       questions: test.shuffle ? shuffleArray(questions) : questions,
       result,
-      currentIndex: 0            // <--- FIX: initialize index
+      currentIndex: 0
     };
     state.testAnswers = {};
     state.flaggedQuestions.clear();
     state.testStartTime = Date.now();
     state.tabSwitchCount = 0;
 
-    // 5. Render interface and start timers
     renderTestInterface();
     startTestTimer();
-    startPausePolling();
+    startPausePolling();      // now calls public endpoint
     startAutoSave();
     document.addEventListener('visibilitychange', handleVisibilityChange);
   } catch (e) {
@@ -193,11 +184,7 @@ function shuffleArray(arr) {
 function renderTestInterface() {
   const modal = document.getElementById('testModal');
   const q = state.currentTest.questions[state.currentTest.currentIndex];
-  if (!q) {
-    showToast('Error: Question not found', 'error');
-    exitTest(false);
-    return;
-  }
+  if (!q) { showToast('Error: Question not found', 'error'); exitTest(false); return; }
   const currentAnswer = state.testAnswers[q.questionId];
   const isFlagged = state.flaggedQuestions.has(q.questionId);
   modal.innerHTML = `
@@ -314,7 +301,8 @@ function startPausePolling() {
   state.pauseInterval = setInterval(async () => {
     if (!state.currentTest) return;
     try {
-      const status = await apiCall(`/admin/paused-status/${state.student.studentId}/${state.currentTest.testId}`);
+      // ✅ Use public endpoint
+      const status = await apiCall(`/student/pause-status/${state.student.studentId}/${state.currentTest.testId}`);
       const overlay = document.getElementById('pauseOverlay');
       if (status.paused) {
         overlay.classList.add('flex');
@@ -324,7 +312,7 @@ function startPausePolling() {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* ignore polling errors */ }
   }, 2000);
 }
 
