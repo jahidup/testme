@@ -168,7 +168,7 @@ function verifyAdminToken(req, res, next) {
 // ==================== API ROUTES ====================
 
 app.get('/api', (req, res) => {
-  res.json({ message: 'NexGen Exam Portal API', version: '2.1' });
+  res.json({ message: 'NexGen Exam Portal API', version: '2.2' });
 });
 
 // -------------------- Authentication --------------------
@@ -511,23 +511,34 @@ app.post('/api/student/submit-test', async (req, res) => {
       const q = questionMap.get(ans.questionId);
       if (!q) continue;
 
-      const marksScheme = q.marks || test.marks;
+      // Use question marks if present, otherwise fallback to test marks
+      const marksScheme = {
+        correct: q.marks?.correct ?? test.marks.correct,
+        wrong: q.marks?.wrong ?? test.marks.wrong,
+        skip: q.marks?.skip ?? test.marks.skip
+      };
+
       let isCorrect = false;
+      const selected = ans.selectedAnswer;
 
       if (q.type === 'mcq') {
-        isCorrect = (parseInt(ans.selectedAnswer) === q.correctAnswer);
+        isCorrect = (parseInt(selected) === q.correctAnswer);
       } else {
         const tolerance = q.tolerance || 0;
-        isCorrect = Math.abs(parseFloat(ans.selectedAnswer) - q.correctAnswer) <= tolerance;
+        const numericAnswer = parseFloat(selected);
+        isCorrect = !isNaN(numericAnswer) && Math.abs(numericAnswer - q.correctAnswer) <= tolerance;
       }
 
-      const marksAwarded = isCorrect
-        ? marksScheme.correct
-        : (ans.selectedAnswer === null ? marksScheme.skip : marksScheme.wrong);
+      let marksAwarded = 0;
+      if (selected === null || selected === undefined || selected === '') {
+        marksAwarded = marksScheme.skip;
+      } else {
+        marksAwarded = isCorrect ? marksScheme.correct : marksScheme.wrong;
+      }
 
       evaluatedAnswers.push({
         questionId: ans.questionId,
-        selectedAnswer: ans.selectedAnswer,
+        selectedAnswer: selected,
         isCorrect,
         marksAwarded
       });
@@ -599,7 +610,22 @@ app.post('/api/admin/resume-test', verifyAdminToken, async (req, res) => {
   }
 });
 
+// Pause status for admin
 app.get('/api/admin/paused-status/:studentId/:testId', verifyAdminToken, async (req, res) => {
+  try {
+    const result = await Result.findOne({
+      studentId: req.params.studentId,
+      testId: req.params.testId
+    }).lean();
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json({ paused: result.paused, totalPausedDuration: result.totalPausedDuration });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// -------------------- Pause Status for Student (Public) --------------------
+app.get('/api/student/pause-status/:studentId/:testId', async (req, res) => {
   try {
     const result = await Result.findOne({
       studentId: req.params.studentId,
@@ -823,8 +849,6 @@ app.get('/api/admin/live-students', verifyAdminToken, async (req, res) => {
 
 // -------------------- Settings --------------------
 app.post('/api/settings/password', verifyAdminToken, async (req, res) => {
-  // In a real implementation, you would update the admin password in Config or environment.
-  // For this demo, we simply return success.
   res.json({ success: true, message: 'Password updated (simulated)' });
 });
 
