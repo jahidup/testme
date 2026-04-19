@@ -132,7 +132,8 @@ const Message = getModel('Message', {
   sender: { type: String, enum: ['student', 'admin'], required: true },
   content: { type: String, required: true },
   isUnblockRequest: { type: Boolean, default: false },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  reactions: { type: Map, of: String, default: {} }
 });
 
 const CommunityMessage = getModel('CommunityMessage', {
@@ -140,7 +141,8 @@ const CommunityMessage = getModel('CommunityMessage', {
   studentName: String,
   studentClass: String,
   content: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  reactions: { type: Map, of: String, default: {} }
 });
 
 const CommunityBan = getModel('CommunityBan', {
@@ -168,7 +170,7 @@ function verifyAdminToken(req, res, next) {
 // ==================== API ROUTES ====================
 
 app.get('/api', (req, res) => {
-  res.json({ message: 'NexGen Exam Portal API', version: '2.2' });
+  res.json({ message: 'NexGen Exam Portal API', version: '2.3' });
 });
 
 // -------------------- Authentication --------------------
@@ -740,6 +742,47 @@ app.post('/api/messages', async (req, res) => {
   }
 });
 
+// Add reaction to a message
+app.post('/api/messages/:id/react', async (req, res) => {
+  try {
+    const { reaction, studentId } = req.body;
+    const message = await Message.findById(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!message.reactions) message.reactions = new Map();
+    message.reactions.set(studentId, reaction);
+    await message.save();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a message (student can delete own, admin can delete any)
+app.delete('/api/messages/:id', async (req, res) => {
+  try {
+    const { studentId, isAdmin } = req.query;
+    const message = await Message.findById(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!isAdmin && message.studentId !== studentId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await Message.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear all messages for a student
+app.delete('/api/messages/clear/:studentId', async (req, res) => {
+  try {
+    await Message.deleteMany({ studentId: req.params.studentId });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // -------------------- Community Chat (Student) --------------------
 app.get('/api/community/:class', async (req, res) => {
   try {
@@ -767,6 +810,37 @@ app.post('/api/community', async (req, res) => {
     res.status(201).json(message);
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Community message reactions
+app.post('/api/community/:id/react', async (req, res) => {
+  try {
+    const { reaction, studentId } = req.body;
+    const message = await CommunityMessage.findById(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!message.reactions) message.reactions = new Map();
+    message.reactions.set(studentId, reaction);
+    await message.save();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete community message (student can delete own, admin can delete any)
+app.delete('/api/community/:id', async (req, res) => {
+  try {
+    const { studentId, isAdmin } = req.query;
+    const message = await CommunityMessage.findById(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!isAdmin && message.studentId !== studentId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await CommunityMessage.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
