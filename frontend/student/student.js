@@ -130,7 +130,7 @@ async function loadAvailableTests(container) {
   }
 }
 
-// ==================== FIXED: startTest with robust error handling ====================
+// ==================== FIXED: startTest with currentIndex initialization ====================
 async function startTest(testId) {
   showLoading();
   try {
@@ -155,12 +155,13 @@ async function startTest(testId) {
       throw new Error('No questions found for this test.');
     }
 
-    // 4. Prepare test state
+    // 4. Prepare test state (CRITICAL: set currentIndex to 0)
     state.currentTest = {
       testId,
       test,
       questions: test.shuffle ? shuffleArray(questions) : questions,
-      result
+      result,
+      currentIndex: 0            // <--- FIX: initialize index
     };
     state.testAnswers = {};
     state.flaggedQuestions.clear();
